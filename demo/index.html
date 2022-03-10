@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>demo2</title>
+</head>
+<script src="./html2canvas.min.js"></script>
+<script src="./fileSaver.js"></script>
+
+<body>
+  <div id="root2" style="width: 1920px;height: 1080px;">
+    <div id="root"
+      style="width: 1920px;height: 1080px;background-color: sandybrown; position: absolute; left: 0; top: 0;">
+      <div id="move" style="width: 100px; height: 100px; background-color: red; position: absolute; left: 0; top: 0;">
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <!-- <button onclick="ready()" style="font-size: large;">ready => </button> -->
+    <button onclick="go()" style="font-size: large;">go => </button>
+    <progress id="go-pgrs" value="0" max="1200"></progress>
+    <button onclick="download()" style="font-size: large;">download !</button>
+    <input type="file" value="选择文件" onchange="inputJsFile(event)"></input>
+    <!-- <button onclick="clip()" style="font-size: large;">clip</button> -->
+    <div>
+      <span>FrameIndex: </span>
+      <span id="frameindex">0</span>
+      <span>；TotalFrame: 800</span>
+      <span>；width: 1920</span>
+      <span>；height: 1080</span>
+      <span>；FPS: 25</span>
+      <span>；CODEC: H264</span>
+    </div>
+  </div>
+
+</body>
+<script>
+  var MP4Encoder = {};
+</script>
+<script src="./mp4encoder.js"></script>
+<script>
+  var MP4Encoder = {}
+  var FS = {}
+  var lengthBytesUTF8 = null;
+  var stringToUTF8 = null;
+  createMP4Encoder().then(m=>{
+    console.log(m)
+    MP4Encoder = m;
+    FS = MP4Encoder.FS
+    lengthBytesUTF8 = MP4Encoder.lengthBytesUTF8
+    stringToUTF8 = MP4Encoder.stringToUTF8
+  })
+  // const wasmInstanceFromFile = await WebAssembly.instantiateStreaming(await fetch('add.wasm'));
+  // let sum = wasmInstanceFromFile.instance.exports.add(1,2);
+  var inputJsFile = function (event) {
+    let file = event.target.files[0];
+    file.arrayBuffer().then(t=>{
+      console.log(t)
+      FS.mkdir('/working');
+      FS.writeFile('/working/input.txt', new Uint8Array(t), { flags:'w+' });
+      console.log(FS.stat('/working/input.txt'))
+      var buff = FS.readFile('/working/input.txt', { encoding: 'binary' });
+      console.log(buff)
+      var pStr = getCStringPtr("/working/input.txt");
+      var ret = MP4Encoder._openTestFile(pStr);
+    });
+  }
+
+
+  var getCStringPtr = function (jstr) {
+    var lengthBytes = lengthBytesUTF8(jstr) + 1;
+    var p = MP4Encoder._malloc(lengthBytes);
+    stringToUTF8(jstr, p, lengthBytes);
+    return p;
+  }
+
+  //file-saver
+  let root = document.getElementById("root");
+  let root2 = document.getElementById("root2");
+  let move = document.getElementById("move");
+  let idx = document.getElementById("frameindex");
+  let pgrs = document.getElementById("go-pgrs");
+
+  let d = 0;
+  let stop = false;
+  let isrunning = false;
+
+
+  var ready = function () {
+    console.log(MP4Encoder);
+    stop = false;
+    var pStr = getCStringPtr("/tmp/demo2.mp4");
+    var ret = MP4Encoder._createH264(pStr, 1920, 1080, 25);
+    console.log("ready =>", ret);
+  }
+
+  let step = async () => {
+    move.style.left = d + "px";
+    move.style.top = (d > 1080 - 100 ? (1080 - 100) * 2 - d : d) + "px";
+    d += 2;
+    idx.innerText = d;
+    pgrs.value = d;
+
+    let canvas = await html2canvas(root, {
+      x: 0,
+      y: 0,
+      width: 1920,
+      height: 1080,
+      scale: 1
+    });
+
+    let ctx = canvas.getContext("2d");
+    let imagedata = ctx.getImageData(0, 0, 1920, 1080); //rgba
+
+    let fileBuffer = new Uint8Array(imagedata.data.buffer);
+    let bufferPtr = MP4Encoder._malloc(fileBuffer.length);
+    MP4Encoder.HEAP8.set(fileBuffer, bufferPtr);
+    var ret = MP4Encoder._addFrame(bufferPtr);
+    MP4Encoder._free(bufferPtr);
+  };
+
+  var go = async () => {
+    if (isrunning) return;
+    isrunning = true;
+    ready();
+
+    for (let i = 0; i < 600; i++) {
+      let ret = await step();
+      if (ret < 0 || stop) return;
+    }
+    stop = true;
+    MP4Encoder._close();
+  };
+
+  var download = () => {
+
+    var buff = FS.readFile('/tmp/demo2.mp4', { encoding: 'binary' });
+    saveAs(new Blob([buff]), `demo2.mp4`);
+  }
+
+  var clip = async () => {
+    let canvas = await html2canvas(root2, {
+      x: 0,
+      y: 0,
+      width: 1080,
+      height: 720,
+      scale: 1
+    });
+    //var offscreen = new OffscreenCanvas(1080, 720);
+
+    let ctx = canvas.getContext("2d");
+    let imagedata = ctx.getImageData(0, 0, canvas.width, canvas.height); //rgba
+
+    root2.removeChild(root);
+    root2.appendChild(canvas);
+    let fileBuffer = new Uint8Array(imagedata.data.buffer);
+    console.log("imagedata.data.buffer", imagedata.data.buffer, fileBuffer);
+  };
+
+
+
+</script>
+
+</html>

@@ -1,0 +1,12 @@
+prefix=/code/build
+exec_prefix=/code/build
+libdir=/code/build/lib
+includedir=/code/build/include
+
+Name: harfbuzz
+Description: HarfBuzz font subsetter
+Version: 2.7.4
+
+Requires: harfbuzz
+Libs: -L${libdir} -lharfbuzz-subset
+Cflags: -I${includedir}/harfbuzz
