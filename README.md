@@ -43,9 +43,8 @@ https://goo.gle/wasm-debugging-extension
 ![](./pics/debug3.png)
 3、打开开发者工具 -> 源代码 -> 左侧file://下即可找到源代码 -> 设置断点 -> 右侧监视添加变量 
 ![](./pics/debug4.png)
-# 需求
-demo中示例只展示了图片转视频的做法
-后续需要把音轨加入到视频中，并且音轨时长需要裁剪合并。
+
+
 
 # 参数传递
 ## 简单参数传递
