@@ -5,9 +5,6 @@ https://developer.mozilla.org/zh-CN/docs/WebAssembly/Concepts
 ## Webassembly api
 https://emscripten.org/docs/api_reference/index.html
 
-## 教程
-https://cntofu.com/book/150/zh/ch1-quick-guide/readme.md
-
 # 编译环境
 https://hub.docker.com/r/emscripten/emsdk/tags  
 拉取远程镜像
@@ -99,8 +96,3 @@ https://goo.gle/wasm-debugging-extension
     });
   }
 ```
-
-
-# 扩展阅读
-https://zhuanlan.zhihu.com/p/337739927  
-https://zhuanlan.zhihu.com/p/260031610  
