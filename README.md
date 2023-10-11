@@ -5,10 +5,8 @@ WebAssembly 是一种新的编码方式，可以在现代的网络浏览器中�
 简而言之，对于网络平台而言，WebAssembly 具有巨大的意义——它提供了一条途径，以使得以各种语言编写的代码都可以以接近原生的速度在 Web 中运行。在这种情况下，以前无法以此方式运行的客户端软件都将可以运行在 Web 中。
 
 WebAssembly 被设计为可以和 JavaScript 一起协同工作——通过使用 WebAssembly 的 JavaScript API，你可以把 WebAssembly 模块加载到一个 JavaScript 应用中并且在两者之间共享功能。这允许你在同一个应用中利用 WebAssembly 的性能和威力以及 JavaScript 的表达力和灵活性，即使你可能并不知道如何编写 WebAssembly 代码。
-https://developer.mozilla.org/zh-CN/docs/WebAssembly
 
-## WebAssembly API
-https://emscripten.org/docs/api_reference/index.html
+本文展示了一个将FFmpeg应用到WebAssembly中的例子。
 
 # 编译环境
 https://hub.docker.com/r/emscripten/emsdk/tags  
@@ -20,10 +18,77 @@ docker pull emscripten/emsdk:2.0.24
 # 启动容器
 映射自己的目录
 ```bash
-docker run -d -it --name mediawasm -v d:/.../media-wasm:/code  emscripten/emsdk:2.0.24 /bin/bash
+docker run -d -it --name mediawasm -v d:/.../wasmff:/code  emscripten/emsdk:2.0.24 /bin/bash
 ```
 
 # 编译
+编译脚本
+```bash
+#!/bin/bash
+
+#set -eo pipefail
+
+WORKPATH=$(cd $(dirname $0); pwd)
+
+DEMO_PATH=$WORKPATH/demo
+
+echo "WORKPATH"=$WORKPATH
+
+rm -rf ${WORKPATH}/demo/mp4encoder.js ${WORKPATH}/demo/mp4encoder.wasm
+
+FFMPEG_ST=yes
+
+EMSDK=/emsdk
+
+THIRD_DIR=${WORKPATH}/lib/third/build
+
+# 生成调试文件
+DEBUG="-g -fno-inline -gseparate-dwarf=/code/demo/temp.debug.wasm -s SEPARATE_DWARF_URL=http://localhost:5000/temp.debug.wasm"
+
+#--closure 压缩胶水代码，有可能会造成变量重复定义。生产发布可设为1
+OPTIM_FLAGS="-O1 $DEBUG --closure 0"
+
+if [[ "$FFMPEG_ST" != "yes" ]]; then
+  EXTRA_FLAGS=(
+    -pthread
+    -s USE_PTHREADS=1                             # enable pthreads support
+    -s PROXY_TO_PTHREAD=1                         # detach main() from browser/UI main thread
+    -o ${DEMO_PATH}/mp4encoder.js
+  )
+else
+  EXTRA_FLAGS=(
+    -o ${DEMO_PATH}/mp4encoder.js
+  )
+fi
+
+FLAGS=(
+  -I$WORKPATH/lib/ffmpeg-emcc/include -L$WORKPATH/lib/ffmpeg-emcc/lib -I$THIRD_DIR/include -L$THIRD_DIR/lib
+  -Wno-deprecated-declarations -Wno-pointer-sign -Wno-implicit-int-float-conversion -Wno-switch -Wno-parentheses -Qunused-arguments
+  -lavdevice -lavfilter -lavformat -lavcodec -lswresample -lswscale -lavutil -lpostproc 
+  -lm -lharfbuzz -lfribidi -lass -lx264 -lx265 -lvpx -lwavpack -lmp3lame -lfdk-aac -lvorbis -lvorbisenc -lvorbisfile -logg -ltheora -ltheoraenc -ltheoradec -lz -lfreetype -lopus -lwebp
+  $DEMO_PATH/encode_v.c
+  
+  -s FORCE_FILESYSTEM=1
+  -s WASM=1
+  -s USE_SDL=2                                  # use SDL2
+  -s INVOKE_RUN=0                               # not to run the main() in the beginning
+  -s EXIT_RUNTIME=1                             # exit runtime after execution
+  -s MODULARIZE=1                               # 延迟加载 use modularized version to be more flexible
+  -s EXPORT_NAME="createMP4Encoder"             # assign export name for browser
+  -s EXPORTED_FUNCTIONS="[_main,_malloc,_free]" # export main and proxy_main funcs
+  -s EXPORTED_RUNTIME_METHODS="[FS, cwrap, ccall, setValue, writeAsciiToMemory]"   # export preamble funcs
+  -s INITIAL_MEMORY=134217728                   # 64 KB * 1024 * 16 * 2047 = 2146435072 bytes ~= 2 GB
+  -s ALLOW_MEMORY_GROWTH=1                      # 允许动态扩展内存
+  --pre-js $WORKPATH/pre.js
+  --post-js $WORKPATH/post.js
+  $OPTIM_FLAGS
+  ${EXTRA_FLAGS[@]}
+)
+echo "FFMPEG_EM_FLAGS=${FLAGS[@]}"
+
+emcc "${FLAGS[@]}"
+
+```
 ```bash
 ./build-demo.sh
 ``` 
@@ -100,3 +165,8 @@ https://goo.gle/wasm-debugging-extension
     });
   }
 ```
+
+扩展阅读
+https://developer.mozilla.org/zh-CN/docs/WebAssembly
+https://developer.mozilla.org/zh-CN/docs/Web/API/IndexedDB_API
+https://emscripten.org/docs/api_reference/index.html
